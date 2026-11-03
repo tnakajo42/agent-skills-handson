@@ -1,0 +1,5 @@
+# 改行は LF にそろえる（Windows で SKILL.md などが CRLF にならないように）
+* text=auto eol=lf
+*.png binary
+*.pdf binary
+*.mp4 binary

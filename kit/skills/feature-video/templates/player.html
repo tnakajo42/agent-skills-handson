@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- AI が書く(1): 題名 -->
+<title>【機能説明の題名】</title>
+<!--
+  動く紙芝居の型（feature-video スキル同梱）
+  - 再生の仕組みと見た目は、この型に入っている。AI が書くのは3か所だけ:
+      (1) <title>  (2) #stage の data-title  (3) 「ここから場面」〜「ここまで場面」の <section>
+  - 場面は <section class="scene" data-sec="秒数" data-caption="字幕（25字まで）"> … 画面 … </section>
+  - 外部の部品（CDN・Web フォント・画像の URL）は読まない。画面は HTML と CSS の図形で描く
+  - 開き方: ブラウザで開くと自動で再生。末尾に #2 を付けると2場面目から始まる
+  - キー: スペース＝一時停止／再開、← →＝前後の場面、R＝最初から
+-->
+<style>
+:root{
+  --font:"Hiragino Sans","Hiragino Kaku Gothic ProN","Yu Gothic","YuGothic","Meiryo","Noto Sans JP",sans-serif;
+  --bg:#f4f6f9; --ink:#1f2933; --sub:#5f6b7a; --line:#d0d6de; --paper:#ffffff;
+  --blue:#1f5fbf; --blue-l:#e8f0fc; --red:#c8102e; --red-l:#fdecef;
+  --green:#2e7d32; --green-l:#e7f4e8; --orange:#b35c00; --orange-l:#fff1e0;
+  --mask:#c9ced6; --mark:#fff3b0;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:#11151c;overflow:hidden}
+body{font-family:var(--font);color:var(--ink);-webkit-font-smoothing:antialiased}
+
+/* 16:9 の舞台（1280×720）をウィンドウに合わせて拡大縮小する */
+#stage{position:absolute;left:50%;top:50%;width:1280px;height:720px;background:var(--bg);
+  transform:translate(-50%,-50%) scale(var(--s,1));transform-origin:center;overflow:hidden}
+
+/* 上の帯：題名と場面の番号 */
+#head{position:absolute;left:0;right:0;top:0;height:52px;display:flex;align-items:center;
+  justify-content:space-between;padding:0 28px;border-bottom:1px solid var(--line);background:var(--paper)}
+#head .t{font-size:18px;font-weight:700;color:var(--sub)}
+#head .n{font-size:18px;font-weight:700;color:var(--blue);letter-spacing:.04em}
+#ctrl{display:flex;gap:10px;align-items:center}
+#ctrl button{font:inherit;font-size:14px;font-weight:700;color:var(--blue);background:var(--blue-l);
+  border:1px solid #c4d6f3;border-radius:999px;padding:5px 14px;cursor:pointer}
+
+/* 場面の置き場 */
+#scenes{position:absolute;left:0;right:0;top:52px;height:496px}
+.scene{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;gap:44px;
+  padding:20px 48px;opacity:0;visibility:hidden;transition:opacity .35s ease}
+.scene.on{opacity:1;visibility:visible}
+
+/* 下の大きな字幕 */
+#cap{position:absolute;left:60px;right:60px;top:560px;height:104px;display:flex;align-items:center;
+  justify-content:center;text-align:center;background:rgba(20,28,40,.92);color:#fff;border-radius:14px;
+  font-size:38px;font-weight:700;line-height:1.3;padding:0 28px;letter-spacing:.02em}
+#cap.fade{animation:capin .35s ease both}
+@keyframes capin{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+
+/* 進み具合の帯（場面ごとの区切りつき） */
+#bar{position:absolute;left:60px;right:60px;top:682px;height:10px;display:flex;gap:6px}
+#bar .seg{position:relative;flex:1;background:#dde2e8;border-radius:5px;overflow:hidden}
+#bar .seg i{position:absolute;left:0;top:0;bottom:0;width:0;background:var(--blue)}
+#bar .seg.done i{width:100%}
+#bar .seg.now i{animation:fill var(--dur) linear both}
+@keyframes fill{to{width:100%}}
+
+/* 最後の「もう一度再生」 */
+#end{position:absolute;right:60px;top:470px;display:none}
+#end.show{display:block}
+#end button{font:inherit;font-size:24px;font-weight:700;color:#fff;background:var(--blue);border:0;
+  border-radius:999px;padding:14px 34px;cursor:pointer;box-shadow:0 8px 24px rgba(31,95,191,.35)}
+
+/* 一時停止中は動きも止める */
+#stage.paused *{animation-play-state:paused!important}
+
+/* ===== 画面を描く部品（場面の中で使う） ===== */
+.col{display:flex;flex-direction:column;gap:14px}
+.row{display:flex;gap:18px;align-items:center}
+.h1{font-size:50px;font-weight:800;letter-spacing:.02em;text-align:center}
+.h2{font-size:30px;font-weight:800}
+.lead{font-size:24px;color:var(--sub);text-align:center}
+.note{font-size:17px;color:var(--sub)}
+.mark{background:var(--mark);padding:0 6px;border-radius:4px;font-weight:700;color:var(--ink)}
+.card{background:var(--paper);border:1px solid var(--line);border-radius:16px;padding:20px 24px;
+  box-shadow:0 4px 14px rgba(0,0,0,.06);font-size:24px;font-weight:700}
+.card.ng{border-top:6px solid var(--red)}
+.card.ok{border-top:6px solid var(--green)}
+.card small{display:block;font-size:17px;font-weight:500;color:var(--sub);margin-top:6px}
+
+/* スマホの枠（中身は .screen の中に） */
+.phone{width:286px;height:456px;border-radius:40px;background:#2b313b;padding:12px;
+  box-shadow:0 14px 34px rgba(0,0,0,.18);flex:none}
+.phone .screen{width:100%;height:100%;border-radius:30px;background:var(--paper);overflow:hidden;
+  display:flex;flex-direction:column}
+.appbar{background:var(--blue);color:#fff;font-size:19px;font-weight:700;padding:16px 18px 12px}
+.appbar small{display:block;font-size:13px;font-weight:500;opacity:.85}
+.body{padding:12px 14px;display:flex;flex-direction:column;gap:10px;flex:1}
+
+/* パソコンの枠 */
+.pc{width:660px;border-radius:14px;background:var(--paper);border:1px solid var(--line);
+  box-shadow:0 14px 34px rgba(0,0,0,.12);overflow:hidden;flex:none}
+.pc .top{height:34px;background:#e9edf2;display:flex;align-items:center;gap:7px;padding:0 14px}
+.pc .top i{width:11px;height:11px;border-radius:50%;background:#c3c9d1}
+.pc .top span{margin-left:12px;font-size:14px;color:var(--sub);font-weight:700}
+.pc .screen{padding:18px 22px}
+
+/* 入力欄・ボタン・一覧 */
+.field{display:flex;flex-direction:column;gap:4px}
+.field .l{font-size:14px;color:var(--sub);font-weight:700}
+.field .v{border:2px solid var(--line);border-radius:10px;padding:8px 12px;font-size:21px;font-weight:700}
+.btn{display:inline-flex;align-items:center;justify-content:center;border-radius:12px;padding:12px 16px;
+  font-size:21px;font-weight:800;color:#fff;background:var(--blue)}
+.btn.ok{background:var(--green)}
+.btn.line{background:var(--paper);color:var(--blue);border:2px solid var(--blue)}
+.item{display:flex;align-items:center;justify-content:space-between;gap:8px;border:1px solid var(--line);
+  border-radius:12px;padding:10px 12px;font-size:18px;font-weight:700}
+.badge{font-size:14px;font-weight:800;border-radius:999px;padding:3px 10px;white-space:nowrap}
+.badge.wait{background:var(--orange-l);color:var(--orange)}
+.badge.done{background:var(--green-l);color:var(--green)}
+.photo{width:74px;height:58px;border-radius:8px;background:linear-gradient(160deg,#cfd8e3,#aab6c4);
+  position:relative;overflow:hidden;flex:none}
+.photo::after{content:"";position:absolute;left:10px;bottom:-14px;width:44px;height:44px;
+  background:#8795a6;transform:rotate(45deg)}
+.mask{display:inline-block;height:16px;width:60px;border-radius:4px;background:var(--mask);vertical-align:middle}
+
+/* 表 */
+.tbl{width:100%;border-collapse:collapse;font-size:18px}
+.tbl th{background:#eef1f5;color:var(--sub);font-weight:700;text-align:left;padding:9px 10px;border-bottom:2px solid var(--line)}
+.tbl td{padding:10px;border-bottom:1px solid var(--line);font-weight:700}
+
+/* 流れの図 */
+.flow{display:flex;align-items:center;gap:14px}
+.step{background:var(--paper);border:2px solid var(--blue);border-radius:16px;padding:16px 18px;
+  font-size:24px;font-weight:800;text-align:center;min-width:170px}
+.step small{display:block;font-size:16px;font-weight:600;color:var(--sub);margin-top:4px}
+.arrow{width:0;height:0;border-top:14px solid transparent;border-bottom:14px solid transparent;
+  border-left:20px solid var(--blue);flex:none}
+
+/* 動き（場面が始まってから --d 秒後に起きる。画面は揺らさない） */
+.scene.on .in{animation:rise .45s ease both;animation-delay:var(--d,0s)}
+@keyframes rise{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+.scene.on .out{animation:gone .3s ease both;animation-delay:var(--d,0s)}
+@keyframes gone{to{opacity:0}}
+.scene.on .tap{animation:tap .5s ease both;animation-delay:var(--d,0s)}
+@keyframes tap{0%{transform:none}40%{transform:scale(.93);filter:brightness(.85)}100%{transform:none}}
+.swap{display:grid}
+.swap>*{grid-area:1/1}
+</style>
+</head>
+<body>
+<!-- AI が書く(2): data-title（上の帯に出る題名。会社名は入力の書き方のまま） -->
+<div id="stage" data-title="【例：青葉建設（架空）様向け 機能説明（試作）】">
+  <div id="head">
+    <div class="t" id="title"></div>
+    <div id="ctrl">
+      <span class="n" id="num"></span>
+      <button id="pause" type="button">一時停止</button>
+      <button id="again" type="button">最初から</button>
+    </div>
+  </div>
+
+  <div id="scenes">
+<!-- ===== ここから場面（AI が書く(3)。下の2つは見本なので、場面表に合わせて全部書き換える） ===== -->
+
+    <section class="scene" data-sec="5" data-caption="【字幕：1文・25字まで】">
+      <div class="col" style="align-items:center;gap:26px">
+        <div class="h1 in">【題名】</div>
+        <div class="row">
+          <div class="card ng in" style="--d:.6s">【困りごと1】<small>【一言】</small></div>
+          <div class="card ng in" style="--d:1s">【困りごと2】<small>【一言】</small></div>
+          <div class="card ng in" style="--d:1.4s">【困りごと3】<small>【一言】</small></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="scene" data-sec="6" data-caption="【字幕：1文・25字まで】">
+      <div class="phone in">
+        <div class="screen">
+          <div class="appbar">【画面の名前】<small>【日付など】</small></div>
+          <div class="body">
+            <div class="field"><span class="l">【項目】</span><span class="v">【選んだ値】</span></div>
+            <div class="row" style="gap:8px"><div class="photo in" style="--d:1.2s"></div><div class="photo in" style="--d:1.5s"></div></div>
+            <div class="btn tap" style="margin-top:auto;--d:2.6s">【ボタン】</div>
+          </div>
+        </div>
+      </div>
+      <div class="col" style="max-width:420px">
+        <div class="h2 in" style="--d:.4s">【機能の名前】</div>
+        <div class="note in" style="--d:.8s">【画面の説明を一言】</div>
+      </div>
+    </section>
+
+<!-- ===== ここまで場面 ===== -->
+  </div>
+
+  <div id="cap"></div>
+  <div id="bar"></div>
+  <div id="end"><button id="replay" type="button">もう一度再生</button></div>
+</div>
+
+<script>
+(function(){
+  var stage=document.getElementById('stage');
+  var scenes=[].slice.call(document.querySelectorAll('#scenes > .scene'));
+  var cap=document.getElementById('cap'), num=document.getElementById('num');
+  var bar=document.getElementById('bar'), end=document.getElementById('end');
+  var pauseBtn=document.getElementById('pause');
+  var cur=0, timer=null, startedAt=0, left=0, paused=false;
+
+  document.getElementById('title').textContent=stage.getAttribute('data-title')||document.title;
+
+  function fit(){
+    var s=Math.min(window.innerWidth/1280, window.innerHeight/720);
+    stage.style.setProperty('--s', s);
+  }
+  window.addEventListener('resize', fit); fit();
+
+  var segs=scenes.map(function(s){
+    var d=document.createElement('div'); d.className='seg';
+    d.style.flex=String(Number(s.getAttribute('data-sec'))||5);
+    d.appendChild(document.createElement('i')); bar.appendChild(d); return d;
+  });
+
+  function sec(i){ return (Number(scenes[i].getAttribute('data-sec'))||5)*1000; }
+
+  function show(i){
+    clearTimeout(timer);
+    cur=Math.max(0, Math.min(scenes.length-1, i));
+    end.classList.remove('show');
+    scenes.forEach(function(s,k){ s.classList.remove('on'); });
+    void stage.offsetWidth;                       // 動きを最初からやり直すため
+    scenes[cur].classList.add('on');
+    cap.classList.remove('fade'); void cap.offsetWidth;
+    cap.textContent=scenes[cur].getAttribute('data-caption')||'';
+    cap.classList.add('fade');
+    num.textContent='場面 '+(cur+1)+' / '+scenes.length;
+    segs.forEach(function(g,k){
+      g.classList.remove('now'); g.classList.toggle('done', k<cur);
+      var bar=g.firstChild; bar.style.animation='none'; void bar.offsetWidth; bar.style.animation='';
+    });
+    segs[cur].style.setProperty('--dur', sec(cur)+'ms');
+    segs[cur].classList.add('now');
+    left=sec(cur); setPaused(false); run();
+  }
+
+  function run(){ startedAt=Date.now(); timer=setTimeout(next, left); }
+
+  function next(){
+    if(cur<scenes.length-1){ show(cur+1); }
+    else { segs[cur].classList.remove('now'); segs[cur].classList.add('done'); end.classList.add('show'); }
+  }
+
+  function setPaused(p){
+    paused=p; stage.classList.toggle('paused', p);
+    pauseBtn.textContent=p?'再開':'一時停止';
+  }
+
+  function togglePause(){
+    if(end.classList.contains('show')) return;
+    if(!paused){ clearTimeout(timer); left-=Date.now()-startedAt; setPaused(true); }
+    else { setPaused(false); run(); }
+  }
+
+  function fromHash(){
+    var m=/^#(\d+)/.exec(location.hash||'');
+    return m ? Number(m[1])-1 : 0;
+  }
+
+  pauseBtn.onclick=togglePause;
+  document.getElementById('again').onclick=function(){ show(0); };
+  document.getElementById('replay').onclick=function(){ show(0); };
+  window.addEventListener('hashchange', function(){ show(fromHash()); });
+  window.addEventListener('keydown', function(e){
+    if(e.key===' '){ e.preventDefault(); togglePause(); }
+    else if(e.key==='ArrowRight'){ show(cur+1); }
+    else if(e.key==='ArrowLeft'){ show(cur-1); }
+    else if(e.key==='r'||e.key==='R'){ show(0); }
+  });
+
+  show(fromHash());
+})();
+</script>
+</body>
+</html>
