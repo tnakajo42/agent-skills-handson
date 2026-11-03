@@ -7,18 +7,13 @@
 
 ## はじめ方
 
-ターミナル（Windows は PowerShell）に、そのまま貼ります。Mac も Windows も同じ文面です。
+ターミナル（Windows は PowerShell。コマンドプロンプトでは動きません）に、この1行をそのまま貼って Enter。Mac も Windows も同じ文面です。
 
 ```text
-cd ~
-git clone https://github.com/tnakajo42/agent-skills-handson.git
-cd agent-skills-handson
-claude plugin marketplace add anthropics/claude-plugins-official
-claude plugin install skill-creator@claude-plugins-official
-claude
+cd ~; git clone https://github.com/tnakajo42/agent-skills-handson.git; cd agent-skills-handson; claude plugin marketplace add anthropics/claude-plugins-official; claude plugin install skill-creator@claude-plugins-official; claude
 ```
 
-ホームフォルダに agent-skills-handson ができて、その中で Claude Code が起動します。続きはプロンプト集の「0 Claude Code に貼る」からです。
+ホームフォルダに agent-skills-handson ができて、その中で Claude Code が起動します（最初に出る確認の画面は Enter）。続きはプロンプト集の「0 Claude Code に貼る」からです。
 
 ## 中身
 
@@ -32,7 +27,7 @@ claude
 
 ## うまくいかないとき
 
-- git clone できない: 講師に予備の zip をもらうか、この画面の Code → Download ZIP で取得。展開したフォルダの名前を agent-skills-handson に変えてホームフォルダに置き、その中で claude を起動
+- git clone できない: 講師に予備の zip をもらうか、この画面の Code → Download ZIP で取得。展開したフォルダの名前を agent-skills-handson に変えてホームフォルダに置き、その中で claude を起動。zip で取ったフォルダは Git のリポジトリではないので、準備の表の3番（git status）は NG のままで進めてよい
 - skill-creator が入らない: ターミナルで `claude plugin install skill-creator@anthropic-plugin-directory`（Claude Code に最初から入っている一覧から入れる）。入ったら claude を起動し直す
 - Node.js が古い: Node.js 24 以上（22 系なら 22.20 以上）を入れる。間に合わなければ講師の画面を見て進める
 - 「already exists」と出る: 同じ名前のフォルダが既にある。そのフォルダの名前を agent-skills-handson-old などに変えてから、もう一度貼る
