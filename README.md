@@ -13,6 +13,7 @@
 cd ~
 git clone https://github.com/tnakajo42/agent-skills-handson.git
 cd agent-skills-handson
+claude plugin marketplace add anthropics/claude-plugins-official
 claude plugin install skill-creator@claude-plugins-official
 claude
 ```
@@ -32,7 +33,7 @@ claude
 ## うまくいかないとき
 
 - git clone できない: 講師に予備の zip をもらうか、この画面の Code → Download ZIP で取得。展開したフォルダの名前を agent-skills-handson に変えてホームフォルダに置き、その中で claude を起動
-- skill-creator が入らない: Claude Code の入力欄で `/plugin marketplace add anthropics/claude-plugins-official` のあと `/plugin install skill-creator@claude-plugins-official`
+- skill-creator が入らない: ターミナルで `claude plugin install skill-creator@anthropic-plugin-directory`（Claude Code に最初から入っている一覧から入れる）。入ったら claude を起動し直す
 - Node.js が古い: Node.js 24 以上（22 系なら 22.20 以上）を入れる。間に合わなければ講師の画面を見て進める
 - 「already exists」と出る: 同じ名前のフォルダが既にある。そのフォルダの名前を agent-skills-handson-old などに変えてから、もう一度貼る
 
